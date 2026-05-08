@@ -168,3 +168,129 @@ export default function App() {
     </div>
   );
 }
+
+
+
+/////////////// REACT WITH CALLBACK AND REF ///////////////
+
+import { useState, useRef, useCallback } from "react";
+
+function getNameById(id, callback) {
+  const delay = Math.floor(Math.random() * 100) + 200;
+  setTimeout(() => callback("User" + id), delay);
+}
+
+function mapLimit(inputs, limit, iterateeFn, onChipUpdate, callback) {
+  const result = [];
+  let index = 0;
+
+  function work() {
+    if (index >= inputs.length) { callback(result); return; }
+    const chunk = inputs.slice(index, index + limit);
+    index += limit;
+    let completed = 0;
+
+    for (let i = 0; i < chunk.length; i++) {
+      iterateeFn(chunk[i], (res) => {
+        completed++;
+        result.push(res);
+        onChipUpdate(chunk[i], res);
+        if (completed === chunk.length) work();
+      });
+    }
+  }
+  work();
+}
+
+export default function App() {
+  const [chips, setChips]     = useState([]);
+  const [output, setOutput]   = useState(null);
+
+  const inputsRaw = useRef("1, 2, 3, 4, 5");
+  const limit     = useRef(2);
+
+  const updateChip = useCallback((id, value) => {
+    setChips(prev =>
+      prev.map(c => c.id === id ? { ...c, status: "done", value } : c)
+    );
+  }, []);
+
+  const markRunning = useCallback((id) => {
+    setChips(prev =>
+      prev.map(c => c.id === id ? { ...c, status: "running" } : c)
+    );
+  }, []);
+
+  const runMap = useCallback(() => {
+    const inputs = inputsRaw.current
+      .split(",")
+      .map(s => Number(s.trim()))
+      .filter(Boolean);
+
+    const initial = inputs.map(id => ({ id, status: "queued", value: "" }));
+    setChips(initial);
+    setOutput(null);
+
+    mapLimit(
+      inputs,
+      limit.current,
+      (id, cb) => {
+        markRunning(id);
+        getNameById(id, cb);
+      },
+      updateChip,
+      (results) => setOutput(results)
+    );
+  }, [markRunning, updateChip]);
+
+  const reset = useCallback(() => {
+    setChips([]);
+    setOutput(null);
+  }, []);
+
+  const statusBg    = { queued: "#FAEEDA", running: "#E6F1FB", done: "#EAF3DE" };
+  const statusColor = { queued: "#633806", running: "#0C447C", done: "#27500A" };
+
+  return (
+    <div style={{ padding: "1.5rem", maxWidth: 600, fontFamily: "sans-serif" }}>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+        <input
+          defaultValue={inputsRaw.current}
+          onChange={e => (inputsRaw.current = e.target.value)}
+          style={{ flex: 1, padding: "6px 10px", borderRadius: 8, border: "1px solid #ccc" }}
+        />
+        <input
+          type="number"
+          defaultValue={limit.current}
+          min={1}
+          onChange={e => (limit.current = Number(e.target.value))}
+          style={{ width: 56, padding: "6px 8px", borderRadius: 8, border: "1px solid #ccc", textAlign: "center" }}
+        />
+        <button onClick={runMap}>Run</button>
+        <button onClick={reset}>Clear</button>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))", gap: 8, marginBottom: 16 }}>
+        {chips.map(chip => (
+          <div key={chip.id} style={{ border: "1px solid #eee", borderRadius: 8, padding: "10px 8px", textAlign: "center" }}>
+            <div style={{ fontSize: 12, color: "gray" }}>Input: {chip.id}</div>
+            <div style={{ fontSize: 14, fontWeight: 500, minHeight: 20 }}>{chip.value}</div>
+            <span style={{
+              fontSize: 11, padding: "2px 6px", borderRadius: 99, display: "inline-block",
+              background: statusBg[chip.status], color: statusColor[chip.status]
+            }}>
+              {chip.status}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {output && (
+        <div style={{ padding: 12, borderRadius: 8, background: "#f5f5f5", fontSize: 14 }}>
+          {JSON.stringify(output)}
+        </div>
+      )}
+    </div>
+  );
+}
